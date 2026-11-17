@@ -84,29 +84,28 @@ def wykonaj_analize(dane: ZadanieAnalizy):
         "pozostalo_analiz": limit_analiz - nowe_uzyte,
     }
 
-
 @app.post("/api/analiza-rynku")
 def wykonaj_analize_rynku(dane: ZadanieAnalizyRynku):
-    klucz = dane.licencja.strip()
-    res = supabase.table("licencje").select("*").eq("klucz", klucz).execute()
-
-    if not res.data or not res.data[0].get("aktywna"):
-        raise HTTPException(status_code=401, detail="Nieprawidłowy lub nieaktywny klucz licencyjny.")
-
-    rekord = res.data[0]
-    limit_analiz = rekord["limit_analiz"]
-    uzyte_analizy = rekord["uzyte_analizy"]
-
-    if uzyte_analizy >= limit_analiz:
-        raise HTTPException(
-            status_code=403,
-            detail="Limit analiz w pakiecie został wyczerpany. Dokup pakiet lub wpisz własny klucz API.",
-        )
-
     try:
-        # Używamy instrukcji systemowej oraz narzędzia wyszukiwania Google do weryfikacji KRS/konkurencji
+        klucz = dane.licencja.strip()
+        res = supabase.table("licencje").select("*").eq("klucz", klucz).execute()
+
+        if not res.data or not res.data[0].get("aktywna"):
+            raise HTTPException(status_code=401, detail="Nieprawidłowy lub nieaktywny klucz licencyjny.")
+
+        rekord = res.data[0]
+        limit_analiz = rekord["limit_analiz"]
+        uzyte_analizy = rekord["uzyte_analizy"]
+
+        if uzyte_analizy >= limit_analiz:
+            raise HTTPException(
+                status_code=403,
+                detail="Limit analiz w pakiecie został wyczerpany. Dokup pakiet lub wpisz własny klucz API.",
+            )
+
+        # Używamy modelu gemini-3.1-pro-preview spójnego z resztą aplikacji
         response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",  # dopasowany do stabilnego wsparcia narzędzi search
+            model="gemini-3.1-pro-preview",
             contents=dane.prompt,
             config=types.GenerateContentConfig(
                 system_instruction=dane.system_instruction,
@@ -115,13 +114,19 @@ def wykonaj_analize_rynku(dane: ZadanieAnalizyRynku):
             ),
         )
         tekst_raportu = response.text
+
+        nowe_uzyte = uzyte_analizy + 1
+        supabase.table("licencje").update({"uzyte_analizy": nowe_uzyte}).eq("klucz", klucz).execute()
+
+        return {
+            "tekst_raportu": tekst_raportu,
+            "pozostalo_analiz": limit_analiz - nowe_uzyte,
+        }
+        
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Błąd komunikacji z Gemini API: {str(e)}")
-
-    nowe_uzyte = uzyte_analizy + 1
-    supabase.table("licencje").update({"uzyte_analizy": nowe_uzyte}).eq("klucz", klucz).execute()
-
-    return {
-        "tekst_raportu": tekst_raportu,
-        "pozostalo_analiz": limit_analiz - nowe_uzyte,
-    }
+        import traceback
+        error_details = traceback.format_exc()
+        print("--- SZCZEGÓŁY BŁĘDU PYTHON ---")
+        print(error_details)
+        print("------------------------------")
+        raise HTTPException(status_code=500, detail=f"Błąd serwera: {str(e)}")
