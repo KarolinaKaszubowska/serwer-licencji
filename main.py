@@ -69,7 +69,7 @@ def wykonaj_analize(dane: ZadanieAnalizy):
 
     try:
         response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",  # lub "gemini-3.8-flash"
+            model="gemini-2.5-flash",
             contents=dane.prompt,
         )
         tekst_raportu = response.text
@@ -103,9 +103,9 @@ def wykonaj_analize_rynku(dane: ZadanieAnalizyRynku):
                 detail="Limit analiz w pakiecie został wyczerpany. Dokup pakiet lub wpisz własny klucz API.",
             )
 
-        # Używamy modelu gemini-3.1-pro-preview spójnego z resztą aplikacji
+        # Używamy modelu gemini-2.5-flash spójnego z resztą aplikacji
         response = gemini_client.models.generate_content(
-            model="gemini-3.1-pro-preview",
+            model="gemini-2.5-flash",
             contents=dane.prompt,
             config=types.GenerateContentConfig(
                 system_instruction=dane.system_instruction,
